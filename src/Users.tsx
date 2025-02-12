@@ -1,6 +1,7 @@
 import { use, useEffect, useState, Suspense } from "react";
 import { ErrorBoundary } from "react-error-boundary";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 const USERS_ENDPOINT = "https://jsonplaceholder.typicode.com/users";
 type User = {
@@ -16,40 +17,43 @@ const usersPromise = fetch(USERS_ENDPOINT).then((res) => {
 export const Users = () => {
   const [search, setSearch] = useState<string>("");
   const [page, setPage] = useState<number>(1);
-  const navigate = useNavigate();
 
   useEffect(() => {
     setPage(1);
   }, [search]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
+    <div className="flex flex-col w-full max-w-2xl space-y-4 mb-8">
+      <div className="flex justify-between items-center mb-8">
         <h2 className="text-xl font-semibold">Users</h2>
-        <button
-          onClick={() => navigate("/")}
-          className="text-blue-600 hover:text-blue-800"
+        <Link
+          to="/"
+          className="text-blue-600 hover:text-blue-800 hover:underline"
         >
           Back to Home
-        </button>
+        </Link>
       </div>
-      <ErrorBoundary fallback={<div>Unable to load users.</div>}>
-        <input
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search users..."
-          className="w-full p-2 border rounded-lg"
-        />
-        <Suspense
-          fallback={<div className="text-center">Loading users...</div>}
-        >
-          <UsersData search={search} page={page} setPage={setPage} />
-        </Suspense>
+      <ErrorBoundary
+        fallback={<div className="text-center">Unable to load users.</div>}
+      >
+        <div className="space-y-4">
+          <input
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search users..."
+            className="w-full p-2 border rounded-lg"
+          />
+          <Suspense
+            fallback={<div className="text-center">Loading users...</div>}
+          >
+            <UsersList search={search} page={page} setPage={setPage} />
+          </Suspense>
+        </div>
       </ErrorBoundary>
     </div>
   );
 };
 
-const UsersData = ({
+const UsersList = ({
   search,
   page,
   setPage,
@@ -62,10 +66,15 @@ const UsersData = ({
   const filteredUsers = users.filter((user) =>
     user.name.toLowerCase().includes(search.toLowerCase())
   );
-
+  const paginatedUsers = filteredUsers.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  );
   return (
     <>
-      <UserContent filteredUsers={filteredUsers} page={page} />
+      {paginatedUsers.map((user, index) => (
+        <UserRow key={index} user={user} />
+      ))}
       <Pagination
         page={page}
         setPage={setPage}
@@ -73,21 +82,6 @@ const UsersData = ({
       />
     </>
   );
-};
-
-const UserContent = ({
-  filteredUsers,
-  page,
-}: {
-  filteredUsers: User[];
-  page: number;
-}) => {
-  const paginatedUsers = filteredUsers.slice(
-    (page - 1) * PAGE_SIZE,
-    page * PAGE_SIZE
-  );
-
-  return <UserList users={paginatedUsers} />;
 };
 
 const Pagination = ({
@@ -100,33 +94,25 @@ const Pagination = ({
   totalUsers: number;
 }) => {
   return (
-    <div className="flex justify-center gap-2">
+    <div className="flex justify-center gap-4">
       <button
         disabled={page === 1}
         onClick={() => setPage(page - 1)}
-        className="px-3 py-1 bg-blue-500 text-white rounded-lg disabled:opacity-50"
+        className="bg-white rounded-lg p-1 text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
-        {"<"}
+        <ChevronLeft className="w-5 h-5" />
       </button>
       <button
         onClick={() => setPage(page + 1)}
         disabled={page === Math.ceil(totalUsers / PAGE_SIZE)}
-        className="px-3 py-1 bg-blue-500 text-white rounded-lg disabled:opacity-50"
+        className="bg-white rounded-lg p-1 text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
-        {">"}
+        <ChevronRight className="w-5 h-5" />
       </button>
     </div>
   );
 };
 
-const UserList = ({ users }: { users: User[] }) => {
-  return (
-    <div className="space-y-2">
-      {users.map((user, index) => (
-        <div key={index} className="p-3 bg-white rounded-lg shadow-sm">
-          {user.name}
-        </div>
-      ))}
-    </div>
-  );
+const UserRow = ({ user }: { user: User }) => {
+  return <div className="rounded-lg shadow-sm">{user.name}</div>;
 };
