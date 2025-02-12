@@ -1,18 +1,14 @@
-import { use, useEffect, useState, Suspense } from "react";
-import { ErrorBoundary } from "react-error-boundary";
+import { useEffect, useState, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { ErrorBoundary } from "./components/errorBoundary";
 
 const USERS_ENDPOINT = "https://jsonplaceholder.typicode.com/users";
 type User = {
   name: string;
 };
 const PAGE_SIZE = 4;
-
-const usersPromise = fetch(USERS_ENDPOINT).then((res) => {
-  if (!res.ok) throw new Error("Failed to fetch users");
-  return res.json();
-});
 
 export const Users = () => {
   const [search, setSearch] = useState<string>("");
@@ -23,12 +19,12 @@ export const Users = () => {
   }, [search]);
 
   return (
-    <div className="flex flex-col w-full max-w-2xl space-y-4 mb-8">
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-xl font-semibold">Users</h2>
+    <div className=" space-y-4">
+      <div className=" flex justify-between items-center mb-8 w-full">
+        <h2 className="text-xl font-semibold truncate">Users</h2>
         <Link
           to="/"
-          className="text-blue-600 hover:text-blue-800 hover:underline"
+          className="text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap ml-4"
         >
           Back to Home
         </Link>
@@ -37,14 +33,14 @@ export const Users = () => {
         fallback={<div className="text-center">Unable to load users.</div>}
       >
         <div className="space-y-4">
-          <input
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search users..."
-            className="w-full p-2 border rounded-lg"
-          />
           <Suspense
             fallback={<div className="text-center">Loading users...</div>}
           >
+            <input
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search users..."
+              className="w-full p-2 border rounded-lg"
+            />
             <UsersList search={search} page={page} setPage={setPage} />
           </Suspense>
         </div>
@@ -62,8 +58,17 @@ const UsersList = ({
   page: number;
   setPage: (page: number) => void;
 }) => {
-  const users = use(usersPromise) as User[];
-  const filteredUsers = users.filter((user) =>
+  const { data: users } = useSuspenseQuery<User[]>({
+    queryKey: ["users"],
+    queryFn: async () => {
+      const response = await fetch(USERS_ENDPOINT);
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      return response.json();
+    },
+  });
+  const filteredUsers = users.filter((user: User) =>
     user.name.toLowerCase().includes(search.toLowerCase())
   );
   const paginatedUsers = filteredUsers.slice(
