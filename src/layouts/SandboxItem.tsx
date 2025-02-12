@@ -9,7 +9,7 @@ const SandboxItemLayout = ({
 }) => {
   return (
     <div className="space-y-4">
-      <div className=" flex justify-between items-center mb-8 w-full">
+      <div className="flex justify-between items-center mb-8 w-full">
         <h2 className="text-xl font-semibold truncate">{title}</h2>
         <Link
           href="/"
