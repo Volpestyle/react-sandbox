@@ -119,5 +119,9 @@ const Pagination = ({
 };
 
 const UserRow = ({ user }: { user: User }) => {
-  return <div className="rounded-lg shadow-sm">{user.name}</div>;
+  return (
+    <div className="p-4 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:bg-gray-700/50 transition-colors duration-200 text-gray-100 shadow-lg backdrop-blur-sm">
+      {user.name}
+    </div>
+  );
 };
