@@ -144,7 +144,7 @@ const Suggestions = ({
   return (
     <>
       {!items?.data?.length && <p className="p-2">No results found</p>}
-      {items?.data?.length && (
+      {!!items?.data?.length && (
         <ul className="mt-2">
           {items?.data?.map((item, index) => (
             <li
