@@ -11,10 +11,6 @@ export function useCitiesSearch(keyword: string) {
   return useQuery<AmadeusResponse>({
     queryKey: ["cities", keyword],
     queryFn: async () => {
-      if (keyword.length <= 2) {
-        return { data: [] };
-      }
-
       const res = await fetch(
         `/api/amadeus/cities?keyword=${encodeURIComponent(keyword)}`
       );

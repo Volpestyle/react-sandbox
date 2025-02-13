@@ -38,7 +38,7 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
    */
   useEffect(() => {
     // When no item is selected, input changes should update search term
-    if (!selectedItem) setSearchTerm(inputVal);
+    if (!selectedItem && inputVal.length >= 2) setSearchTerm(inputVal);
 
     // Clear selection if user modifies input after selecting an item
     if (selectedItem && inputVal !== selectedItem) setSelectedItem("");

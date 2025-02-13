@@ -21,7 +21,14 @@ if (!isDev) {
     PutCommand = commands.PutCommand;
     DeleteCommand = commands.DeleteCommand;
 
-    const client = new DynamoDBClient({});
+    const client = new DynamoDBClient({
+        credentials: {
+            accessKeyId: process.env.ACCESS_KEY_ID!,
+            secretAccessKey: process.env.SECRET_ACCESS_KEY!
+        },
+        region: process.env.REGION || 'us-east-1'
+    });
+
     prodCache = {
         client: commands.DynamoDBDocumentClient.from(client),
         tableName: process.env.DYNAMODB_TABLE_NAME!
