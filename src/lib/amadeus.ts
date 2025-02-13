@@ -8,7 +8,8 @@ const AMADEUS_API_URL = process.env.AMADEUS_API_URL;
 const isDev = process.env.NODE_ENV === 'development';
 
 // For development, use in-memory cache
-const devCache = new NodeCache({ stdTTL: 3600 });
+const devCache = isDev ? new NodeCache({ stdTTL: 3600 }) : undefined;
+
 
 // For production, use DynamoDB
 let prodCache: any;
@@ -35,13 +36,27 @@ if (!isDev) {
     };
 }
 
+/**
+ * Retrieves an authentication token for the Amadeus API.
+ * First checks for a valid cached token (either in-memory cache for dev or DynamoDB for prod).
+ * If no valid cached token exists, requests a new one from the Amadeus API.
+ * 
+ * The token is cached with an expiration time 5 minutes before the actual expiry
+ * to ensure we don't use tokens that are about to expire.
+ * 
+ * @returns {Promise<string>} The Amadeus API authentication token
+ * @throws {Error} If unable to retrieve a token from the Amadeus API
+ */
 export async function getToken() {
     try {
+        console.log('Getting Amadeus authentication token...');
         let cachedToken;
 
-        if (isDev) {
+        if (devCache) {
+            console.log('Using development in-memory cache');
             cachedToken = devCache.get('amadeus_token');
         } else {
+            console.log('Using production DynamoDB cache');
             const getCommand = new GetCommand({
                 TableName: prodCache.tableName,
                 Key: { key: 'amadeus_token' }
@@ -51,9 +66,11 @@ export async function getToken() {
         }
 
         if (cachedToken && cachedToken.expiresAt > Date.now()) {
+            console.log('Using cached token valid until', new Date(cachedToken.expiresAt).toISOString());
             return cachedToken.token;
         }
 
+        console.log('No valid cached token found, requesting new token from Amadeus API');
         // If no valid token, get new one
         const response = await fetch(AMADEUS_API_URL + "/security/oauth2/token", {
             method: "POST",
@@ -68,18 +85,23 @@ export async function getToken() {
         });
 
         if (!response.ok) {
+            console.error('Failed to get token from Amadeus API:', response.status, response.statusText);
             throw new Error("Failed to get token");
         }
 
         const data = await response.json();
+        console.log('Successfully received new token from Amadeus API');
+
         const tokenData = {
             token: data.access_token,
-            expiresAt: Date.now() + (data.expires_in * 1000) - 300000,
+            expiresAt: Date.now() + (data.expires_in * 1000) - 300000, // 5 minutes buffer
         };
 
-        if (isDev) {
+        if (devCache) {
+            console.log('Caching token in development memory cache');
             devCache.set('amadeus_token', tokenData, Math.floor(data.expires_in - 300));
         } else {
+            console.log('Caching token in production DynamoDB');
             const putCommand = new PutCommand({
                 TableName: prodCache.tableName,
                 Item: {
@@ -91,6 +113,7 @@ export async function getToken() {
             await prodCache.client.send(putCommand);
         }
 
+        console.log('Token cached successfully, expires at', new Date(tokenData.expiresAt).toISOString());
         return data.access_token;
     } catch (error) {
         console.error('Error getting token:', error);
@@ -99,9 +122,12 @@ export async function getToken() {
 }
 
 export function clearToken() {
-    if (isDev) {
+    console.log('Clearing cached Amadeus token');
+    if (devCache) {
+        console.log('Clearing token from development memory cache');
         devCache.del('amadeus_token');
     } else {
+        console.log('Clearing token from production DynamoDB');
         return prodCache.client.send(
             new DeleteCommand({
                 TableName: prodCache.tableName,
