@@ -1,35 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AMADEUS_AUTH_URL } from "@/constants";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import NodeCache from "node-cache";
 
 const AMADEUS_API_KEY = process.env.AMADEUS_API_KEY;
 const AMADEUS_API_SECRET = process.env.AMADEUS_API_SECRET;
 const AMADEUS_API_URL = process.env.AMADEUS_API_URL;
 
-const client = new DynamoDBClient({});
-const docClient = DynamoDBDocumentClient.from(client);
-const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME!;
+// Use different caching strategies based on environment
+const isDev = process.env.NODE_ENV === 'development';
+
+// For development, use in-memory cache
+const devCache = new NodeCache({ stdTTL: 3600 });
+
+// For production, use DynamoDB
+let prodCache: any;
+let GetCommand: any, PutCommand: any, DeleteCommand: any;
+
+if (!isDev) {
+    const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
+    const commands = require("@aws-sdk/lib-dynamodb");
+    GetCommand = commands.GetCommand;
+    PutCommand = commands.PutCommand;
+    DeleteCommand = commands.DeleteCommand;
+
+    const client = new DynamoDBClient({});
+    prodCache = {
+        client: commands.DynamoDBDocumentClient.from(client),
+        tableName: process.env.DYNAMODB_TABLE_NAME!
+    };
+}
 
 async function getToken() {
     try {
-        // Try to get cached token from DynamoDB
-        const getCommand = new GetCommand({
-            TableName: TABLE_NAME,
-            Key: {
-                key: 'amadeus_token'
-            }
-        });
+        let cachedToken;
 
-        const cachedItem = await docClient.send(getCommand);
-        const cachedToken = cachedItem.Item;
+        if (isDev) {
+            // Dev: Use NodeCache
+            console.log('getting token from devCache', devCache.get('amadeus_token'));
+            cachedToken = devCache.get('amadeus_token');
+        } else {
+            // Prod: Use DynamoDB
+            console.log('getting token from prodCache', prodCache);
+            const getCommand = new GetCommand({
+                TableName: prodCache.tableName,
+                Key: { key: 'amadeus_token' }
+            });
+            const cachedItem = await prodCache.client.send(getCommand);
+            cachedToken = cachedItem.Item;
+        }
 
         if (cachedToken && cachedToken.expiresAt > Date.now()) {
             return cachedToken.token;
         }
 
         // If no valid token, get new one
-        const response = await fetch(AMADEUS_AUTH_URL, {
+        const response = await fetch(AMADEUS_API_URL + "/security/oauth2/token", {
             method: "POST",
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -46,21 +71,29 @@ async function getToken() {
         }
 
         const data = await response.json();
-
         const tokenData = {
-            key: 'amadeus_token',
             token: data.access_token,
             expiresAt: Date.now() + (data.expires_in * 1000) - 300000,
-            ttl: Math.floor((Date.now() + (data.expires_in * 1000)) / 1000) // DynamoDB TTL
         };
 
-        // Store in DynamoDB
-        const putCommand = new PutCommand({
-            TableName: TABLE_NAME,
-            Item: tokenData
-        });
+        if (isDev) {
+            // Dev: Cache in NodeCache
+            console.log('caching token in devCache', tokenData);
+            devCache.set('amadeus_token', tokenData, Math.floor(data.expires_in - 300));
+        } else {
+            // Prod: Store in DynamoDB
+            console.log('caching token in prodCache', tokenData);
+            const putCommand = new PutCommand({
+                TableName: prodCache.tableName,
+                Item: {
+                    key: 'amadeus_token',
+                    ...tokenData,
+                    ttl: Math.floor((Date.now() + (data.expires_in * 1000)) / 1000)
+                }
+            });
+            await prodCache.client.send(putCommand);
+        }
 
-        await docClient.send(putCommand);
         return data.access_token;
     } catch (error) {
         console.error('Error getting token:', error);
@@ -71,14 +104,10 @@ async function getToken() {
 export async function GET(request: NextRequest): Promise<NextResponse> {
     const keyword = request.nextUrl.searchParams.get('keyword');
 
-    if (!keyword) {
-        return NextResponse.json({ data: [] }, { status: 200 });
-    }
-
     try {
         const token = await getToken();
         const response = await fetch(
-            `${AMADEUS_API_URL}/reference-data/locations/cities?keyword=${keyword}`,
+            `${AMADEUS_API_URL}/reference-data/locations/cities?keyword=${keyword}&max=10`,
             {
                 headers: {
                     Authorization: `Bearer ${token}`,
@@ -88,37 +117,43 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
         if (!response.ok) {
             if (response.status === 401) {
-                // Delete expired token
-                const deleteCommand = new DeleteCommand({
-                    TableName: TABLE_NAME,
-                    Key: {
-                        key: 'amadeus_token'
-                    }
-                });
-                await docClient.send(deleteCommand);
-
-                const newToken = await getToken();
-                const retryResponse = await fetch(
-                    `${AMADEUS_API_URL}/reference-data/locations/cities?keyword=${keyword}`,
-                    {
-                        headers: {
-                            Authorization: `Bearer ${newToken}`,
-                        },
-                    }
-                );
-                if (retryResponse.ok) {
-                    return NextResponse.json(await retryResponse.json());
+                // Clear expired token
+                if (isDev) {
+                    console.log('clearing expired token from devCache');
+                    devCache.del('amadeus_token');
+                } else {
+                    console.log('clearing expired token from prodCache');
+                    const deleteCommand = new DeleteCommand({
+                        TableName: prodCache.tableName,
+                        Key: { key: 'amadeus_token' }
+                    });
+                    await prodCache.client.send(deleteCommand);
                 }
             }
-            throw new Error("Failed to fetch cities");
+
+            const errorData = await response.json();
+            throw new Error(JSON.stringify({
+                status: response.status,
+                ...errorData
+            }));
         }
 
         const data = await response.json();
         return NextResponse.json(data);
     } catch (error) {
         console.error('Error fetching cities:', error);
+
+        // If it's our structured error, pass it through
+        if (error instanceof Error && error.message.startsWith('{')) {
+            return NextResponse.json(
+                JSON.parse(error.message),
+                { status: JSON.parse(error.message).status }
+            );
+        }
+
+        // For unexpected errors
         return NextResponse.json(
-            { error: "Failed to fetch cities" },
+            { error: 'Internal Server Error', message: error instanceof Error ? error.message : 'Unknown error' },
             { status: 500 }
         );
     }

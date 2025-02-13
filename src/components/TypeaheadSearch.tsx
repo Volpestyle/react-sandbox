@@ -1,7 +1,7 @@
 "use client";
 import ErrorMessage from "@/components/ErrorMessage";
 import Loading from "@/components/Loading";
-import { QueryErrorResetBoundary, UseQueryResult } from "@tanstack/react-query";
+import { UseQueryResult } from "@tanstack/react-query";
 import { Suspense, use, useEffect, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { useDebounce } from "@/hooks/util";
@@ -9,6 +9,7 @@ import { AmadeusResponse } from "@/types/amadeus";
 
 interface TypeaheadSearchProps {
   fetchItems: (keyword: string) => UseQueryResult<AmadeusResponse, Error>;
+  placeholder?: string;
 }
 
 /**
@@ -16,67 +17,89 @@ interface TypeaheadSearchProps {
  * @param {Function} fetchItems - A function that returns a query result for fetching data based on search keyword
  * @returns A search input with typeahead suggestions
  */
-const TypeaheadSearch = ({ fetchItems }: TypeaheadSearchProps) => {
-  const [keyword, setKeyword] = useState("");
-  const [selectedCity, setSelectedCity] = useState<string>("");
+const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
+  const [inputVal, setInputVal] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedItem, setSelectedItem] = useState<string>("");
+  const [retry, setRetry] = useState<number>(0);
 
-  const debouncedKeyword = useDebounce(keyword, 300);
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const itemsQuery = fetchItems(debouncedSearchTerm);
 
-  const items = fetchItems(debouncedKeyword);
+  /**
+   * Manages the synchronization between input value and search/selection states
+   *
+   * Two main responsibilities:
+   * 1. Updates search term when user is typing (no selection active)
+   * 2. Clears selection when user modifies the input after selecting an item
+   *
+   * @dependency inputVal - Current value in the input field
+   * @dependency selectedItem - Currently selected suggestion item
+   */
+  useEffect(() => {
+    // When no item is selected, input changes should update search term
+    if (!selectedItem) setSearchTerm(inputVal);
+
+    // Clear selection if user modifies input after selecting an item
+    if (selectedItem && inputVal !== selectedItem) setSelectedItem("");
+  }, [inputVal, selectedItem]);
 
   useEffect(() => {
-    if (keyword !== selectedCity) setSelectedCity("");
-  }, [keyword, selectedCity]);
+    setRetry((prev) => prev + 1);
+  }, [debouncedSearchTerm]);
 
   return (
     <>
-      <Input keyword={keyword} setKeyword={setKeyword} />
-      <QueryErrorResetBoundary>
-        {({ reset }) => (
-          <ErrorBoundary
-            onReset={reset}
-            fallbackRender={({ error, resetErrorBoundary }) => (
-              <ErrorMessage
-                error={error}
-                showStack={false}
-                resetErrorBoundary={() => {
-                  items.refetch();
-                  resetErrorBoundary();
+      <Input
+        inputVal={inputVal}
+        setInputVal={setInputVal}
+        placeholder={placeholder}
+      />
+      <ErrorBoundary
+        key={retry}
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <ErrorMessage
+            error={error}
+            showStack={false}
+            resetErrorBoundary={resetErrorBoundary}
+          />
+        )}
+        onReset={() => {
+          setRetry((prev) => prev + 1);
+          itemsQuery.refetch();
+        }}
+      >
+        <Suspense fallback={<Loading message="cities" />}>
+          {debouncedSearchTerm.length < 2 && (
+            <p>Start typing to search for cities</p>
+          )}
+          {debouncedSearchTerm.length >= 2 &&
+            debouncedSearchTerm === inputVal &&
+            !selectedItem && (
+              <Suggestions
+                itemsQuery={itemsQuery}
+                onItemSelect={(item) => {
+                  setInputVal(item);
+                  setSelectedItem(item);
                 }}
               />
             )}
-          >
-            <Suspense fallback={<Loading message="cities" />}>
-              {debouncedKeyword.length < 2 && (
-                <p>Start typing to search for cities</p>
-              )}
-              {debouncedKeyword.length > 2 && !selectedCity && (
-                <Suggestions
-                  fetchItems={items}
-                  onItemSelect={(item) => {
-                    setKeyword(item);
-                    setSelectedCity(item);
-                  }}
-                />
-              )}
-            </Suspense>
-          </ErrorBoundary>
-        )}
-      </QueryErrorResetBoundary>
+        </Suspense>
+      </ErrorBoundary>
     </>
   );
 };
 
 const Suggestions = ({
-  fetchItems,
+  itemsQuery,
   onItemSelect,
   onChange,
 }: {
-  fetchItems: UseQueryResult<AmadeusResponse, Error>;
+  itemsQuery: UseQueryResult<AmadeusResponse, Error>;
   onItemSelect: (item: string) => void;
   onChange?: () => void;
 }) => {
-  const items = use(fetchItems.promise);
+  const items = use(itemsQuery.promise);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
 
   useEffect(() => {
@@ -119,37 +142,43 @@ const Suggestions = ({
   }, [items, selectedIndex, onItemSelect]);
 
   return (
-    <div>
-      <ul className="mt-2">
-        {items?.data?.map((item, index) => (
-          <li
-            key={index}
-            className={`p-2 ${
-              selectedIndex === index ? "bg-gray-100 text-black" : ""
-            } hover:bg-gray-100 hover:text-black`}
-          >
-            {item.name}
-          </li>
-        ))}
-      </ul>
-    </div>
+    <>
+      {!items?.data?.length && <p className="p-2">No results found</p>}
+      {items?.data?.length && (
+        <ul className="mt-2">
+          {items?.data?.map((item, index) => (
+            <li
+              key={index}
+              onClick={() => onItemSelect(item.name)}
+              className={`p-2 ${
+                selectedIndex === index ? "bg-gray-100 text-black" : ""
+              } hover:bg-gray-100 hover:text-black`}
+            >
+              {item.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
   );
 };
 
 const Input = ({
-  keyword,
-  setKeyword,
+  inputVal,
+  setInputVal,
+  placeholder = "Search...",
 }: {
-  keyword: string;
-  setKeyword: (keyword: string) => void;
+  inputVal: string;
+  setInputVal: (inputVal: string) => void;
+  placeholder?: string;
 }) => {
   return (
     <input
-      value={keyword}
+      value={inputVal}
       onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-        setKeyword(e.target.value)
+        setInputVal(e.target.value)
       }
-      placeholder="Search cities..."
+      placeholder={placeholder}
       className="text-black px-4 py-2 border rounded-md"
     />
   );
