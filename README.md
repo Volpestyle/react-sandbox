@@ -1,6 +1,7 @@
 # React Sandbox
 
 Repo for playing with React so i don't have to use CodeSandbox.
+Deployed [here](https://main.d7ujsev3jz9wt.amplifyapp.com)
 
 ## Getting Started
 
