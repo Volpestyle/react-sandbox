@@ -15,7 +15,12 @@ export default function Page() {
             >
               Amadeus City Search API
             </a>{" "}
-            😎 <br /> Features include:
+            😎 <br />
+            <p className="mt-2">
+              If the request is failing, you can usually retry until it works.{" "}
+              <span className="italic">(this test api is flakey af)</span>
+            </p>
+            <h4 className="mt-4 text-md font-semibold">Features include:</h4>
           </p>
           <ul className="text-gray-500 dark:text-gray-400 space-y-0.5 list-disc ml-4">
             <li>keyboard navigation support (↑/↓ arrows)</li>
@@ -23,7 +28,7 @@ export default function Page() {
               storing and reusing the Amadeus API auth token in server-side
               cache. (was that necessary? idk, but woo saftey)
             </li>
-            <li>robust error handling with (this test api is flakey af)</li>
+            <li>robust error handling</li>
             <li>
               <a
                 href="https://tanstack.com/query/latest/docs/framework/react/guides/suspense#using-usequerypromise-and-reactuse-experimental"

@@ -6,6 +6,7 @@ import { Suspense, use, useEffect, useState } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { useDebounce } from "@/hooks/util";
 import { AmadeusResponse } from "@/types/amadeus";
+import { KEYWORD_MIN_LENGTH } from "@/constants";
 
 interface TypeaheadSearchProps {
   fetchItems: (keyword: string) => UseQueryResult<AmadeusResponse, Error>;
@@ -38,7 +39,8 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
    */
   useEffect(() => {
     // When no item is selected, input changes should update search term
-    if (!selectedItem && inputVal.length >= 2) setSearchTerm(inputVal);
+    if (!selectedItem && inputVal.length >= KEYWORD_MIN_LENGTH)
+      setSearchTerm(inputVal);
 
     // Clear selection if user modifies input after selecting an item
     if (selectedItem && inputVal !== selectedItem) setSelectedItem("");
@@ -70,10 +72,10 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
         }}
       >
         <Suspense fallback={<Loading message="cities" />}>
-          {debouncedSearchTerm.length < 2 && (
+          {debouncedSearchTerm.length < KEYWORD_MIN_LENGTH && (
             <p>Start typing to search for cities</p>
           )}
-          {debouncedSearchTerm.length >= 2 &&
+          {debouncedSearchTerm.length >= KEYWORD_MIN_LENGTH &&
             debouncedSearchTerm === inputVal &&
             !selectedItem && (
               <Suggestions
