@@ -1,20 +1,20 @@
-"use client";
 import { useEffect, useState, Suspense } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronLeft, ChevronRight, Loader } from "lucide-react";
 import {
   QueryErrorResetBoundary,
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { ErrorBoundary } from "react-error-boundary";
-import ErrorMessage from "@/components/ErrorMessage";
-import { USERS_ENDPOINT } from "@/constants";
-import Loading from "@/components/Loading";
+import ErrorMessage from "./components/ErrorMessage";
+
+const USERS_ENDPOINT = "https://jsonplaceholder.typicode.com/users";
 type User = {
   name: string;
 };
 const PAGE_SIZE = 4;
 
-export const UserSearch = () => {
+export const Users = () => {
   const [search, setSearch] = useState<string>("");
   const [page, setPage] = useState<number>(1);
 
@@ -23,31 +23,49 @@ export const UserSearch = () => {
   }, [search]);
 
   return (
-    <QueryErrorResetBoundary>
-      {({ reset }) => (
-        <ErrorBoundary
-          onReset={reset}
-          fallbackRender={({ error, resetErrorBoundary }) => (
-            <ErrorMessage
-              error={error}
-              showStack={false}
-              resetErrorBoundary={resetErrorBoundary}
-            />
-          )}
+    <div className=" space-y-4">
+      <div className=" flex justify-between items-center mb-8 w-full">
+        <h2 className="text-xl font-semibold truncate">Users</h2>
+        <Link
+          to="/"
+          className="text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap ml-4"
         >
-          <div className="space-y-4">
-            <Suspense fallback={<Loading message="users" />}>
-              <input
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search users..."
-                className="w-full p-2 border rounded-lg"
+          Back to Home
+        </Link>
+      </div>
+      <QueryErrorResetBoundary>
+        {({ reset }) => (
+          <ErrorBoundary
+            onReset={reset}
+            fallbackRender={({ error, resetErrorBoundary }) => (
+              <ErrorMessage
+                error={error}
+                showStack={false}
+                resetErrorBoundary={resetErrorBoundary}
               />
-              <UsersList search={search} page={page} setPage={setPage} />
-            </Suspense>
-          </div>
-        </ErrorBoundary>
-      )}
-    </QueryErrorResetBoundary>
+            )}
+          >
+            <div className="space-y-4">
+              <Suspense
+                fallback={
+                  <div className="text-center">
+                    <p>Loading users...</p>
+                    <Loader className="animate-spin h-6 w-6 mx-auto" />
+                  </div>
+                }
+              >
+                <input
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search users..."
+                  className="w-full p-2 border rounded-lg"
+                />
+                <UsersList search={search} page={page} setPage={setPage} />
+              </Suspense>
+            </div>
+          </ErrorBoundary>
+        )}
+      </QueryErrorResetBoundary>
+    </div>
   );
 };
 

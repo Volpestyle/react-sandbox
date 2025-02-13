@@ -1,10 +1,10 @@
 const ErrorMessage = ({
   error,
-  showStack,
   resetErrorBoundary,
+  showStack = false,
 }: {
   error: Error;
-  showStack: boolean;
+  showStack?: boolean;
   resetErrorBoundary: () => void;
 }) => {
   return (

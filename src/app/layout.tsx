@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import QueryClientLayout from "@/layouts/QueryClient";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,6 +33,7 @@ export default function RootLayout({
           <main className="max-w-3xl mx-auto mt-16 font-[family-name:var(--font-geist-sans)]">
             {children}
           </main>
+          <ReactQueryDevtools />
         </QueryClientLayout>
       </body>
     </html>

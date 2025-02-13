@@ -8,7 +8,13 @@ export const QueryClientLayout = ({
 }: {
   children: React.ReactNode;
 }) => {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        experimental_prefetchInRender: true,
+      },
+    },
+  });
   return (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
