@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NextJS/ReactSandbox",
+  title: "NextJS/React Sandbox",
   description: "the lab",
 };
 

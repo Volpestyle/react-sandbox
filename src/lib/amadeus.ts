@@ -1,4 +1,6 @@
 import NodeCache from "node-cache";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 
 const AMADEUS_API_KEY = process.env.AMADEUS_API_KEY;
 const AMADEUS_API_SECRET = process.env.AMADEUS_API_SECRET;
@@ -10,52 +12,31 @@ const isDev = process.env.NODE_ENV === 'development';
 // For development, use in-memory cache
 const devCache = isDev ? new NodeCache({ stdTTL: 3600 }) : undefined;
 
+// For production, initialize DynamoDB utilities
+let ddbClient: any;
 
-// For production, use DynamoDB
-let prodCache: any;
-let GetCommand: any, PutCommand: any, DeleteCommand: any;
+async function getDynamoClient() {
+    if (!ddbClient) {
 
-if (!isDev) {
-    const { DynamoDBClient } = require("@aws-sdk/client-dynamodb");
-    const commands = require("@aws-sdk/lib-dynamodb");
-    GetCommand = commands.GetCommand;
-    PutCommand = commands.PutCommand;
-    DeleteCommand = commands.DeleteCommand;
+        const accessKeyId = process.env.ACCESS_KEY_ID;
+        const secretAccessKey = process.env.SECRET_ACCESS_KEY;
+        const region = process.env.REGION || 'us-east-1';
 
-    // Add credential validation
-    const accessKeyId = process.env.ACCESS_KEY_ID;
-    const secretAccessKey = process.env.SECRET_ACCESS_KEY;
-    const region = process.env.REGION || 'us-east-1';
+        if (!accessKeyId || !secretAccessKey) {
+            throw new Error('AWS credentials not properly configured');
+        }
 
-    if (!accessKeyId || !secretAccessKey) {
-        console.error('AWS credentials not found:', {
-            hasAccessKey: !!accessKeyId,
-            hasSecretKey: !!secretAccessKey,
+        const client = new DynamoDBClient({
+            credentials: { accessKeyId, secretAccessKey },
             region
         });
-        throw new Error('AWS credentials not properly configured');
+
+        ddbClient = {
+            client: DynamoDBDocumentClient.from(client),
+            tableName: process.env.DYNAMODB_TABLE_NAME!
+        };
     }
-
-    console.log('Initializing DynamoDB client with:', {
-        hasAccessKey: !!accessKeyId,
-        accessKeyLength: accessKeyId?.length,
-        hasSecretKey: !!secretAccessKey,
-        secretKeyLength: secretAccessKey?.length,
-        region
-    });
-
-    const client = new DynamoDBClient({
-        credentials: {
-            accessKeyId,
-            secretAccessKey
-        },
-        region
-    });
-
-    prodCache = {
-        client: commands.DynamoDBDocumentClient.from(client),
-        tableName: process.env.DYNAMODB_TABLE_NAME!
-    };
+    return ddbClient;
 }
 
 /**
@@ -71,30 +52,13 @@ if (!isDev) {
  */
 export async function getToken() {
     try {
-        console.log('Getting Amadeus authentication token...');
-        let cachedToken;
-
-        if (devCache) {
-            console.log('Using development in-memory cache');
-            cachedToken = devCache.get('amadeus_token');
-        } else {
-            console.log('Using production DynamoDB cache');
-            const getCommand = new GetCommand({
-                TableName: prodCache.tableName,
-                Key: { key: 'amadeus_token' }
-            });
-            const cachedItem = await prodCache.client.send(getCommand);
-            cachedToken = cachedItem.Item;
-        }
+        const cachedToken = await getCachedToken();
 
         if (cachedToken && cachedToken.expiresAt > Date.now()) {
-            console.log('Using cached token valid until', new Date(cachedToken.expiresAt).toISOString());
             return cachedToken.token;
         }
 
-        console.log('No valid cached token found, requesting new token from Amadeus API');
-        // If no valid token, get new one
-        const response = await fetch(AMADEUS_API_URL + "/security/oauth2/token", {
+        const response = await fetch(`${AMADEUS_API_URL}/security/oauth2/token`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -107,35 +71,18 @@ export async function getToken() {
         });
 
         if (!response.ok) {
-            console.error('Failed to get token from Amadeus API:', response.status, response.statusText);
-            throw new Error("Failed to get token");
+            throw new Error(`Failed to get token: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
-        console.log('Successfully received new token from Amadeus API');
 
         const tokenData = {
             token: data.access_token,
             expiresAt: Date.now() + (data.expires_in * 1000) - 300000, // 5 minutes buffer
         };
 
-        if (devCache) {
-            console.log('Caching token in development memory cache');
-            devCache.set('amadeus_token', tokenData, Math.floor(data.expires_in - 300));
-        } else {
-            console.log('Caching token in production DynamoDB');
-            const putCommand = new PutCommand({
-                TableName: prodCache.tableName,
-                Item: {
-                    key: 'amadeus_token',
-                    ...tokenData,
-                    ttl: Math.floor((Date.now() + (data.expires_in * 1000)) / 1000)
-                }
-            });
-            await prodCache.client.send(putCommand);
-        }
+        await cacheToken(tokenData, data.expires_in);
 
-        console.log('Token cached successfully, expires at', new Date(tokenData.expiresAt).toISOString());
         return data.access_token;
     } catch (error) {
         console.error('Error getting token:', error);
@@ -143,18 +90,64 @@ export async function getToken() {
     }
 }
 
-export function clearToken() {
-    console.log('Clearing cached Amadeus token');
-    if (devCache) {
-        console.log('Clearing token from development memory cache');
-        devCache.del('amadeus_token');
-    } else {
-        console.log('Clearing token from production DynamoDB');
-        return prodCache.client.send(
-            new DeleteCommand({
-                TableName: prodCache.tableName,
-                Key: { key: 'amadeus_token' }
-            })
-        );
+export async function clearToken() {
+    try {
+        if (isDev && devCache) {
+            devCache.del('amadeus_token');
+            return;
+        }
+
+        const client = await getDynamoClient();
+
+        await client.client.send(new DeleteCommand({
+            TableName: client.tableName,
+            Key: { key: 'amadeus_token' }
+        }));
+    } catch (error) {
+        console.error('Error clearing token:', error);
+        throw error;
     }
-} 
+}
+
+async function getCachedToken() {
+    try {
+        if (devCache) {
+            return devCache.get('amadeus_token');
+        }
+
+        const client = await getDynamoClient();
+
+        const cachedItem = await client.client.send(new GetCommand({
+            TableName: client.tableName,
+            Key: { key: 'amadeus_token' }
+        }));
+
+        return cachedItem.Item;
+    } catch (error) {
+        console.error('Error getting cached token:', error);
+        return null;
+    }
+}
+
+async function cacheToken(tokenData: any, expiresIn: number) {
+    try {
+        if (devCache) {
+            devCache.set('amadeus_token', tokenData, Math.floor(expiresIn - 300));
+            return;
+        }
+
+        const client = await getDynamoClient();
+
+        await client.client.send(new PutCommand({
+            TableName: client.tableName,
+            Item: {
+                key: 'amadeus_token',
+                ...tokenData,
+                ttl: Math.floor((Date.now() + (expiresIn * 1000)) / 1000)
+            }
+        }));
+    } catch (error) {
+        console.error('Error caching token:', error);
+        // Don't throw - token is still valid even if caching fails
+    }
+}
