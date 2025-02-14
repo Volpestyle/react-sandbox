@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function Home() {
   return (
     <div className="space-y-4">
-      <h1 className="text-4xl font-bold">React Sandbox</h1>
+      <h1 className="text-4xl font-bold">NextJS/React Sandbox</h1>
       <div className="mt-6 flex flex-col">
         <Link
           href="/users-search"

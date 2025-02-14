@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Next.js Sandbox",
-  description: "fun with next.js",
+  title: "NextJS/ReactSandbox",
+  description: "the lab",
 };
 
 export default function RootLayout({
