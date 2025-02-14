@@ -1,6 +1,9 @@
 import NodeCache from "node-cache";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBClientConfig } from "@/types/aws";
+import { AmadeusTokenData, AmadeusTokenResponse } from '@/types/amadeus';
+import { AMADEUS_TOKEN_KEY } from "@/constants";
 
 const AMADEUS_API_KEY = process.env.AMADEUS_API_KEY;
 const AMADEUS_API_SECRET = process.env.AMADEUS_API_SECRET;
@@ -13,9 +16,9 @@ const isDev = process.env.NODE_ENV === 'development';
 const devCache = isDev ? new NodeCache({ stdTTL: 3600 }) : undefined;
 
 // For production, initialize DynamoDB utilities
-let ddbClient: any;
+let ddbClient: DynamoDBClientConfig;
 
-async function getDynamoClient() {
+async function getDynamoClientConfig() {
     if (!ddbClient) {
 
         const accessKeyId = process.env.ACCESS_KEY_ID;
@@ -30,6 +33,8 @@ async function getDynamoClient() {
             credentials: { accessKeyId, secretAccessKey },
             region
         });
+
+
 
         ddbClient = {
             client: DynamoDBDocumentClient.from(client),
@@ -50,7 +55,7 @@ async function getDynamoClient() {
  * @returns {Promise<string>} The Amadeus API authentication token
  * @throws {Error} If unable to retrieve a token from the Amadeus API
  */
-export async function getToken() {
+export async function getToken(): Promise<string> {
     try {
         const cachedToken = await getCachedToken();
 
@@ -58,6 +63,7 @@ export async function getToken() {
             return cachedToken.token;
         }
 
+        console.log('Fetching new token');
         const response = await fetch(`${AMADEUS_API_URL}/security/oauth2/token`, {
             method: "POST",
             headers: {
@@ -74,9 +80,9 @@ export async function getToken() {
             throw new Error(`Failed to get token: ${response.status} ${response.statusText}`);
         }
 
-        const data = await response.json();
+        const data = await response.json() as AmadeusTokenResponse;
 
-        const tokenData = {
+        const tokenData: AmadeusTokenData = {
             token: data.access_token,
             expiresAt: Date.now() + (data.expires_in * 1000) - 300000, // 5 minutes buffer
         };
@@ -92,16 +98,18 @@ export async function getToken() {
 
 export async function clearToken() {
     try {
-        if (isDev && devCache) {
-            devCache.del('amadeus_token');
+        if (devCache) {
+            console.log('Clearing dev cache token');
+            devCache.del(AMADEUS_TOKEN_KEY);
             return;
         }
 
-        const client = await getDynamoClient();
+        const config = await getDynamoClientConfig();
 
-        await client.client.send(new DeleteCommand({
-            TableName: client.tableName,
-            Key: { key: 'amadeus_token' }
+        console.log('Clearing DynamoDB token');
+        await config.client.send(new DeleteCommand({
+            TableName: config.tableName,
+            Key: { key: AMADEUS_TOKEN_KEY }
         }));
     } catch (error) {
         console.error('Error clearing token:', error);
@@ -112,42 +120,45 @@ export async function clearToken() {
 async function getCachedToken() {
     try {
         if (devCache) {
-            return devCache.get('amadeus_token');
+            console.log('Getting cached token from dev cache');
+            return devCache.get<AmadeusTokenData>(AMADEUS_TOKEN_KEY);
         }
 
-        const client = await getDynamoClient();
+        const config = await getDynamoClientConfig();
 
-        const cachedItem = await client.client.send(new GetCommand({
-            TableName: client.tableName,
-            Key: { key: 'amadeus_token' }
+        console.log('Getting cached token from DynamoDB');
+        const cachedItem = await config.client.send(new GetCommand({
+            TableName: config.tableName,
+            Key: { key: AMADEUS_TOKEN_KEY }
         }));
 
-        return cachedItem.Item;
+        return cachedItem.Item as AmadeusTokenData;
     } catch (error) {
         console.error('Error getting cached token:', error);
-        return null;
+        return;
     }
 }
 
-async function cacheToken(tokenData: any, expiresIn: number) {
+async function cacheToken(tokenData: AmadeusTokenData, expiresIn: number) {
     try {
         if (devCache) {
-            devCache.set('amadeus_token', tokenData, Math.floor(expiresIn - 300));
+            console.log('Caching token in dev cache');
+            devCache.set(AMADEUS_TOKEN_KEY, tokenData, Math.floor(expiresIn - 300));
             return;
         }
 
-        const client = await getDynamoClient();
+        const config = await getDynamoClientConfig();
 
-        await client.client.send(new PutCommand({
-            TableName: client.tableName,
+        console.log('Caching token in DynamoDB');
+        await config.client.send(new PutCommand({
+            TableName: config.tableName,
             Item: {
-                key: 'amadeus_token',
+                key: AMADEUS_TOKEN_KEY,
                 ...tokenData,
                 ttl: Math.floor((Date.now() + (expiresIn * 1000)) / 1000)
             }
         }));
     } catch (error) {
         console.error('Error caching token:', error);
-        // Don't throw - token is still valid even if caching fails
     }
 }

@@ -1,3 +1,26 @@
+export interface AmadeusTokenData {
+    token: string;
+    expiresAt: number;
+}
+
+export interface AmadeusTokenResponse {
+    access_token: string;
+    expires_in: number;
+}
+
+export interface AmadeusResponse {
+    data: Location[];
+    included?: {
+        airports?: Record<string, Location>;
+    };
+    meta: {
+        count: string;
+        links: {
+            self: string;
+        };
+    };
+}
+
 interface GeoCode {
     latitude: string;
     longitude: string;
@@ -23,24 +46,6 @@ export interface Location {
     address: Address;
     geoCode: GeoCode;
     relationships?: Relationship[];
-}
-
-export interface AmadeusResponse {
-    data: Location[];
-    included?: {
-        airports?: Record<string, Location>;
-    };
-    meta: {
-        count: string;
-        links: {
-            self: string;
-        };
-    };
-}
-
-export interface AmadeusToken {
-    access_token: string;
-    expires_in: number;
 }
 
 export interface CityResponse {
