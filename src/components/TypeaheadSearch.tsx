@@ -76,7 +76,7 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
             <p>Start typing to search for cities</p>
           )}
           {debouncedSearchTerm.length >= KEYWORD_MIN_LENGTH &&
-            debouncedSearchTerm === inputVal &&
+            searchTerm === inputVal &&
             !selectedItem && (
               <Suggestions
                 keyword={debouncedSearchTerm}
