@@ -1,7 +1,6 @@
-# NextJS Sandbox
+# NextJS/React Sandbox
 
-Repo for playing with React and NextJS so i don't have to use CodeSandbox.
-Deployed [here](https://main.d7ujsev3jz9wt.amplifyapp.com)
+Let me cook. Deployed [here](https://main.d7ujsev3jz9wt.amplifyapp.com)
 
 ## Getting Started
 
