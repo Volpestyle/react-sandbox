@@ -24,11 +24,14 @@ export default function Page() {
           </p>
           <ul className="text-gray-500 dark:text-gray-400 space-y-0.5 list-disc ml-4">
             <li>keyboard navigation support (↑/↓ arrows)</li>
+            <li>client-side query results caching (react query)</li>
             <li>
-              storing and reusing the Amadeus API auth token in server-side
-              cache. (was that necessary? idk, but woo saftey)
+              manually storing and reusing the Amadeus API auth token in a
+              server-side cache for security and to avoid unnecessary token requests on each
+              serverless function invocation. (dynamoDB. was it necessary? idk,
+              but good luck getting that token! >:D )
             </li>
-            <li>robust error handling</li>
+            <li>robust error handling with automatic retries</li>
             <li>
               <a
                 href="https://tanstack.com/query/latest/docs/framework/react/guides/suspense#using-usequerypromise-and-reactuse-experimental"
@@ -47,7 +50,7 @@ export default function Page() {
               >
                 use
               </a>{" "}
-              pattern
+              React 19 pattern
             </li>
           </ul>
         </div>

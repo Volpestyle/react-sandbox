@@ -9,7 +9,6 @@ const nextConfig: NextConfig = {
     AMADEUS_API_KEY: process.env.AMADEUS_API_KEY,
     AMADEUS_API_SECRET: process.env.AMADEUS_API_SECRET,
     AMADEUS_API_URL: process.env.AMADEUS_API_URL,
-    DYNAMODB_TABLE_NAME: process.env.DYNAMODB_TABLE_NAME,
   },
 };
 
