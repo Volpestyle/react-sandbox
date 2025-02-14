@@ -27,9 +27,9 @@ export default function Page() {
             <li>client-side query results caching (react query)</li>
             <li>
               manually storing and reusing the Amadeus API auth token in a
-              server-side cache for security and to avoid unnecessary token requests on each
-              serverless function invocation. (dynamoDB. was it necessary? idk,
-              but good luck getting that token! >:D )
+              server-side cache for security and to avoid unnecessary token
+              requests on each serverless function invocation. (dynamoDB. was it
+              necessary? idk, but good luck getting that token! &gt;:D )
             </li>
             <li>robust error handling with automatic retries</li>
             <li>
