@@ -1,10 +1,8 @@
 import NodeCache from "node-cache";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, GetCommand, PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
-import { DynamoDBClientConfig } from "@/types/aws";
+import { GetCommand, PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { AmadeusTokenData, AmadeusTokenResponse } from '@/types/amadeus';
-import { AMADEUS_TOKEN_KEY } from "@/constants";
-
+import { AMADEUS_TOKEN_KEY, AMADEUS_TOKEN_TABLE_NAME } from "@/constants";
+import { getDynamoClient } from "./aws";
 const AMADEUS_API_KEY = process.env.AMADEUS_API_KEY;
 const AMADEUS_API_SECRET = process.env.AMADEUS_API_SECRET;
 const AMADEUS_API_URL = process.env.AMADEUS_API_URL;
@@ -13,36 +11,8 @@ const AMADEUS_API_URL = process.env.AMADEUS_API_URL;
 const isDev = process.env.NODE_ENV === 'development';
 
 // For development, use in-memory cache
-const devCache = isDev ? new NodeCache({ stdTTL: 3600 }) : undefined;
-
-// For production, initialize DynamoDB utilities
-let ddbClient: DynamoDBClientConfig;
-
-async function getDynamoClientConfig() {
-    if (!ddbClient) {
-
-        const accessKeyId = process.env.ACCESS_KEY_ID;
-        const secretAccessKey = process.env.SECRET_ACCESS_KEY;
-        const region = process.env.REGION || 'us-east-1';
-
-        if (!accessKeyId || !secretAccessKey) {
-            throw new Error('AWS credentials not properly configured');
-        }
-
-        const client = new DynamoDBClient({
-            credentials: { accessKeyId, secretAccessKey },
-            region
-        });
-
-
-
-        ddbClient = {
-            client: DynamoDBDocumentClient.from(client),
-            tableName: process.env.DYNAMODB_TABLE_NAME!
-        };
-    }
-    return ddbClient;
-}
+// For production, use dynamoDB as cache
+const cacheClient = isDev ? new NodeCache({ stdTTL: 3600 }) : getDynamoClient();
 
 /**
  * Retrieves an authentication token for the Amadeus API.
@@ -98,17 +68,15 @@ export async function getToken(): Promise<string> {
 
 export async function clearToken() {
     try {
-        if (devCache) {
+        if (cacheClient instanceof NodeCache) {
             console.log('Clearing dev cache token');
-            devCache.del(AMADEUS_TOKEN_KEY);
+            cacheClient.del(AMADEUS_TOKEN_KEY);
             return;
         }
 
-        const config = await getDynamoClientConfig();
-
         console.log('Clearing DynamoDB token');
-        await config.client.send(new DeleteCommand({
-            TableName: config.tableName,
+        await cacheClient.send(new DeleteCommand({
+            TableName: AMADEUS_TOKEN_TABLE_NAME,
             Key: { key: AMADEUS_TOKEN_KEY }
         }));
     } catch (error) {
@@ -119,16 +87,14 @@ export async function clearToken() {
 
 async function getCachedToken() {
     try {
-        if (devCache) {
+        if (cacheClient instanceof NodeCache) {
             console.log('Getting cached token from dev cache');
-            return devCache.get<AmadeusTokenData>(AMADEUS_TOKEN_KEY);
+            return cacheClient.get<AmadeusTokenData>(AMADEUS_TOKEN_KEY);
         }
 
-        const config = await getDynamoClientConfig();
-
         console.log('Getting cached token from DynamoDB');
-        const cachedItem = await config.client.send(new GetCommand({
-            TableName: config.tableName,
+        const cachedItem = await cacheClient.send(new GetCommand({
+            TableName: AMADEUS_TOKEN_TABLE_NAME,
             Key: { key: AMADEUS_TOKEN_KEY }
         }));
 
@@ -141,17 +107,15 @@ async function getCachedToken() {
 
 async function cacheToken(tokenData: AmadeusTokenData, expiresIn: number) {
     try {
-        if (devCache) {
+        if (cacheClient instanceof NodeCache) {
             console.log('Caching token in dev cache');
-            devCache.set(AMADEUS_TOKEN_KEY, tokenData, Math.floor(expiresIn - 300));
+            cacheClient.set(AMADEUS_TOKEN_KEY, tokenData, Math.floor(expiresIn - 300));
             return;
         }
 
-        const config = await getDynamoClientConfig();
-
         console.log('Caching token in DynamoDB');
-        await config.client.send(new PutCommand({
-            TableName: config.tableName,
+        await cacheClient.send(new PutCommand({
+            TableName: AMADEUS_TOKEN_TABLE_NAME,
             Item: {
                 key: AMADEUS_TOKEN_KEY,
                 ...tokenData,
