@@ -107,28 +107,36 @@ const Suggestions = ({
   const items = use(itemsQuery.promise);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
 
-  // This sorting prioritizes items that start with the search keyword
-  // and then alphabetically sorts the rest
-  const sortedItems = useMemo(
-    () =>
-      [...items.data].sort((a, b) => {
-        // Check if each item's name starts with the search keyword
-        const aStartsWithKeyword = a.name
-          .toLowerCase()
-          .startsWith(keyword.toLowerCase());
-        const bStartsWithKeyword = b.name
-          .toLowerCase()
-          .startsWith(keyword.toLowerCase());
+  // Enhanced sorting with progressive matching priority
+  const sortedItems = useMemo(() => {
+    if (!items?.data) return [];
+    const searchTerm = keyword.toLowerCase();
 
-        // If item A starts with keyword but B doesn't, A comes first (-1)
-        if (aStartsWithKeyword && !bStartsWithKeyword) return -1;
-        // If item B starts with keyword but A doesn't, B comes first (1)
-        if (!aStartsWithKeyword && bStartsWithKeyword) return 1;
-        // If both/neither start with keyword, sort alphabetically
-        return a.name.localeCompare(b.name);
-      }),
-    [items?.data, keyword]
-  );
+    // Generate array of progressive search terms
+    // e.g., for "chic": ["chic", "chi", "ch", "c"]
+    const searchTerms = Array.from({ length: searchTerm.length }, (_, i) =>
+      searchTerm.slice(0, searchTerm.length - i)
+    );
+
+    return [...items.data].sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+
+      // Find the longest matching prefix for each item
+      const aMatchLength =
+        searchTerms.find((term) => aName.startsWith(term))?.length || 0;
+      const bMatchLength =
+        searchTerms.find((term) => bName.startsWith(term))?.length || 0;
+
+      // Sort by match length (longer matches first)
+      if (aMatchLength !== bMatchLength) {
+        return bMatchLength - aMatchLength;
+      }
+
+      // If match lengths are equal, sort alphabetically
+      return aName.localeCompare(bName);
+    });
+  }, [items?.data, keyword]);
 
   useEffect(() => {
     onChange?.();
