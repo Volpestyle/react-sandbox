@@ -2,7 +2,7 @@
 import ErrorMessage from "@/components/ErrorMessage";
 import Loading from "@/components/Loading";
 import { UseQueryResult } from "@tanstack/react-query";
-import { Suspense, use, useEffect, useState } from "react";
+import { Suspense, use, useEffect, useState, useMemo } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { useDebounce } from "@/hooks/util";
 import { AmadeusResponse } from "@/types/amadeus";
@@ -79,6 +79,7 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
             debouncedSearchTerm === inputVal &&
             !selectedItem && (
               <Suggestions
+                keyword={debouncedSearchTerm}
                 itemsQuery={itemsQuery}
                 onItemSelect={(item) => {
                   setInputVal(item);
@@ -93,10 +94,12 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
 };
 
 const Suggestions = ({
+  keyword,
   itemsQuery,
   onItemSelect,
   onChange,
 }: {
+  keyword: string;
   itemsQuery: UseQueryResult<AmadeusResponse, Error>;
   onItemSelect: (item: string) => void;
   onChange?: () => void;
@@ -104,12 +107,35 @@ const Suggestions = ({
   const items = use(itemsQuery.promise);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
 
+  // This sorting prioritizes items that start with the search keyword
+  // and then alphabetically sorts the rest
+  const sortedItems = useMemo(
+    () =>
+      [...items.data].sort((a, b) => {
+        // Check if each item's name starts with the search keyword
+        const aStartsWithKeyword = a.name
+          .toLowerCase()
+          .startsWith(keyword.toLowerCase());
+        const bStartsWithKeyword = b.name
+          .toLowerCase()
+          .startsWith(keyword.toLowerCase());
+
+        // If item A starts with keyword but B doesn't, A comes first (-1)
+        if (aStartsWithKeyword && !bStartsWithKeyword) return -1;
+        // If item B starts with keyword but A doesn't, B comes first (1)
+        if (!aStartsWithKeyword && bStartsWithKeyword) return 1;
+        // If both/neither start with keyword, sort alphabetically
+        return a.name.localeCompare(b.name);
+      }),
+    [items?.data, keyword]
+  );
+
   useEffect(() => {
     onChange?.();
     setSelectedIndex((prev) =>
-      prev < items?.data?.length - 1 ? prev : items?.data?.length - 1
+      prev < sortedItems.length - 1 ? prev : sortedItems.length - 1
     );
-  }, [items]);
+  }, [sortedItems, onChange]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -117,20 +143,20 @@ const Suggestions = ({
         case "ArrowDown": {
           e.preventDefault();
           setSelectedIndex((prev) =>
-            prev < items?.data?.length - 1 ? prev + 1 : 0
+            prev < sortedItems.length - 1 ? prev + 1 : 0
           );
           break;
         }
         case "ArrowUp": {
           e.preventDefault();
           setSelectedIndex((prev) =>
-            prev > 0 ? prev - 1 : items?.data?.length - 1
+            prev > 0 ? prev - 1 : sortedItems.length - 1
           );
           break;
         }
         case "Enter": {
           if (selectedIndex >= 0) {
-            onItemSelect(items?.data?.[selectedIndex].name);
+            onItemSelect(sortedItems[selectedIndex].name);
           }
           break;
         }
@@ -141,20 +167,21 @@ const Suggestions = ({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [items, selectedIndex, onItemSelect]);
+  }, [sortedItems, selectedIndex, onItemSelect]);
 
   return (
     <>
-      {!items?.data?.length && <p className="p-2">No results found</p>}
-      {!!items?.data?.length && (
+      {!sortedItems.length && <p className="p-2">No results found</p>}
+      {!!sortedItems.length && (
         <ul className="mt-2">
-          {items?.data?.map((item, index) => (
+          {sortedItems.map((item, index) => (
             <li
               key={index}
               onClick={() => onItemSelect(item.name)}
+              onMouseEnter={() => setSelectedIndex(index)}
               className={`p-2 ${
                 selectedIndex === index ? "bg-gray-100 text-black" : ""
-              } hover:bg-gray-100 hover:text-black`}
+              } cursor-pointer`}
             >
               {item.name}
             </li>

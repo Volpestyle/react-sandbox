@@ -9,11 +9,11 @@ const SandboxItemLayout = ({
 }) => {
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center mb-8 w-full">
-        <h2 className="text-xl font-semibold truncate">{title}</h2>
+      <div className="flex flex-col sm:flex-row justify-between mb-8 w-full gap-4">
+        <h2 className="text-xl font-semibold">{title}</h2>
         <Link
           href="/"
-          className="text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap ml-4"
+          className="text-blue-600 hover:text-blue-800 hover:underline whitespace-nowrap"
         >
           Back to Home
         </Link>

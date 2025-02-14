@@ -30,7 +30,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryClientLayout>
-          <main className="max-w-3xl mx-auto mt-16 font-[family-name:var(--font-geist-sans)]">
+          <main className="max-w-3xl mx-auto mt-16 pl-4 pr-4 font-[family-name:var(--font-geist-sans)]">
             {children}
           </main>
           <ReactQueryDevtools />

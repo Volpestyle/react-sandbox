@@ -22,12 +22,34 @@ if (!isDev) {
     PutCommand = commands.PutCommand;
     DeleteCommand = commands.DeleteCommand;
 
+    // Add credential validation
+    const accessKeyId = process.env.ACCESS_KEY_ID;
+    const secretAccessKey = process.env.SECRET_ACCESS_KEY;
+    const region = process.env.REGION || 'us-east-1';
+
+    if (!accessKeyId || !secretAccessKey) {
+        console.error('AWS credentials not found:', {
+            hasAccessKey: !!accessKeyId,
+            hasSecretKey: !!secretAccessKey,
+            region
+        });
+        throw new Error('AWS credentials not properly configured');
+    }
+
+    console.log('Initializing DynamoDB client with:', {
+        hasAccessKey: !!accessKeyId,
+        accessKeyLength: accessKeyId?.length,
+        hasSecretKey: !!secretAccessKey,
+        secretKeyLength: secretAccessKey?.length,
+        region
+    });
+
     const client = new DynamoDBClient({
         credentials: {
-            accessKeyId: process.env.ACCESS_KEY_ID!,
-            secretAccessKey: process.env.SECRET_ACCESS_KEY!
+            accessKeyId,
+            secretAccessKey
         },
-        region: process.env.REGION || 'us-east-1'
+        region
     });
 
     prodCache = {
