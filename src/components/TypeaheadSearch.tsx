@@ -72,7 +72,7 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
         }}
       >
         <Suspense fallback={<Loading message="cities" />}>
-          {debouncedSearchTerm.length < KEYWORD_MIN_LENGTH && (
+          {inputVal.length < KEYWORD_MIN_LENGTH && (
             <p>Start typing to search for cities</p>
           )}
           {debouncedSearchTerm.length >= KEYWORD_MIN_LENGTH &&
@@ -179,7 +179,7 @@ const Suggestions = ({
 
   return (
     <>
-      {!sortedItems.length && <p className="p-2">No results found</p>}
+      {!sortedItems.length && <p>No results found</p>}
       {!!sortedItems.length && (
         <ul className="mt-2">
           {sortedItems.map((item, index) => (
