@@ -6,11 +6,12 @@ import { Suspense, use, useEffect, useState, useMemo } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { useDebounce } from "@/hooks/util";
 import { AmadeusResponse } from "@/types/amadeus";
-import { KEYWORD_MIN_LENGTH } from "@/constants";
 
 interface TypeaheadSearchProps {
   fetchItems: (keyword: string) => UseQueryResult<AmadeusResponse, Error>;
-  placeholder?: string;
+  label?: string;
+  showEmptyState?: boolean;
+  keywordMinLength?: number;
 }
 
 /**
@@ -18,7 +19,12 @@ interface TypeaheadSearchProps {
  * @param {Function} fetchItems - A function that returns a query result for fetching data based on search keyword
  * @returns A search input with typeahead suggestions
  */
-const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
+const TypeaheadSearch = ({
+  fetchItems,
+  label = "suggestions",
+  showEmptyState = true,
+  keywordMinLength = 1,
+}: TypeaheadSearchProps) => {
   const [inputVal, setInputVal] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedItem, setSelectedItem] = useState<string>("");
@@ -39,7 +45,7 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
    */
   useEffect(() => {
     // When no item is selected, input changes should update search term
-    if (!selectedItem && inputVal.length >= KEYWORD_MIN_LENGTH)
+    if (!selectedItem && inputVal.length >= keywordMinLength)
       setSearchTerm(inputVal);
 
     // Clear selection if user modifies input after selecting an item
@@ -55,7 +61,7 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
       <Input
         inputVal={inputVal}
         setInputVal={setInputVal}
-        placeholder={placeholder}
+        placeholder={`Search for ${label}...`}
       />
       <ErrorBoundary
         key={retry}
@@ -71,11 +77,11 @@ const TypeaheadSearch = ({ fetchItems, placeholder }: TypeaheadSearchProps) => {
           itemsQuery.refetch();
         }}
       >
-        <Suspense fallback={<Loading message="cities" />}>
-          {inputVal.length < KEYWORD_MIN_LENGTH && (
-            <p>Start typing to search for cities</p>
+        <Suspense fallback={<Loading message={label} />}>
+          {showEmptyState && inputVal.length < keywordMinLength && (
+            <p>Start typing to search for {label}</p>
           )}
-          {debouncedSearchTerm.length >= KEYWORD_MIN_LENGTH &&
+          {debouncedSearchTerm.length >= keywordMinLength &&
             searchTerm === inputVal &&
             !selectedItem && (
               <Suggestions
