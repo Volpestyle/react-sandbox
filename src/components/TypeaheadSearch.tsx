@@ -128,13 +128,16 @@ const Suggestions = ({
       const bMatchLength =
         searchTerms.find((term) => bName.startsWith(term))?.length || 0;
 
-      // Sort by match length (longer matches first)
       if (aMatchLength !== bMatchLength) {
+        // Sort by match length
         return bMatchLength - aMatchLength;
+      } else if (aMatchLength === 0 && bMatchLength === 0) {
+        // If no match, sort alphabetically
+        return aName.localeCompare(bName);
+      } else {
+        // If match lengths are equal, put shorter names first
+        return aName.length - bName.length;
       }
-
-      // If match lengths are equal, sort alphabetically
-      return aName.localeCompare(bName);
     });
   }, [items?.data, keyword]);
 
