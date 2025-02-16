@@ -5,10 +5,12 @@ import { UseQueryResult } from "@tanstack/react-query";
 import { Suspense, use, useEffect, useState, useMemo } from "react";
 import { ErrorBoundary } from "react-error-boundary";
 import { useDebounce } from "@/hooks/util";
-import { AmadeusResponse } from "@/types/amadeus";
+import { TypeaheadItem } from "@/hooks/api";
 
 interface TypeaheadSearchProps {
-  fetchItems: (keyword: string) => UseQueryResult<AmadeusResponse, Error>;
+  fetchItems: (keyword: string) => UseQueryResult<TypeaheadItem[], Error>;
+  selectedItem: TypeaheadItem | null;
+  setSelectedItem: (item: TypeaheadItem | null) => void;
   label?: string;
   showEmptyState?: boolean;
   keywordMinLength?: number;
@@ -21,13 +23,14 @@ interface TypeaheadSearchProps {
  */
 const TypeaheadSearch = ({
   fetchItems,
+  selectedItem,
+  setSelectedItem,
   label = "suggestions",
   showEmptyState = true,
   keywordMinLength = 1,
 }: TypeaheadSearchProps) => {
   const [inputVal, setInputVal] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedItem, setSelectedItem] = useState<string>("");
   const [retry, setRetry] = useState<number>(0);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -49,7 +52,8 @@ const TypeaheadSearch = ({
       setSearchTerm(inputVal);
 
     // Clear selection if user modifies input after selecting an item
-    if (selectedItem && inputVal !== selectedItem) setSelectedItem("");
+    if (selectedItem && inputVal !== selectedItem.displayText)
+      setSelectedItem(null);
   }, [inputVal, selectedItem]);
 
   useEffect(() => {
@@ -57,7 +61,7 @@ const TypeaheadSearch = ({
   }, [debouncedSearchTerm]);
 
   return (
-    <>
+    <div className="space-y-4">
       <Input
         inputVal={inputVal}
         setInputVal={setInputVal}
@@ -88,14 +92,14 @@ const TypeaheadSearch = ({
                 keyword={debouncedSearchTerm}
                 itemsQuery={itemsQuery}
                 onItemSelect={(item) => {
-                  setInputVal(item);
+                  setInputVal(item.displayText);
                   setSelectedItem(item);
                 }}
               />
             )}
         </Suspense>
       </ErrorBoundary>
-    </>
+    </div>
   );
 };
 
@@ -106,8 +110,8 @@ const Suggestions = ({
   onChange,
 }: {
   keyword: string;
-  itemsQuery: UseQueryResult<AmadeusResponse, Error>;
-  onItemSelect: (item: string) => void;
+  itemsQuery: UseQueryResult<TypeaheadItem[], Error>;
+  onItemSelect: (item: TypeaheadItem) => void;
   onChange?: () => void;
 }) => {
   const items = use(itemsQuery.promise);
@@ -115,7 +119,7 @@ const Suggestions = ({
 
   // Enhanced sorting with progressive matching priority
   const sortedItems = useMemo(() => {
-    if (!items?.data) return [];
+    if (!items) return [];
     const searchTerm = keyword.toLowerCase();
 
     // Generate array of progressive search terms
@@ -124,9 +128,9 @@ const Suggestions = ({
       searchTerm.slice(0, searchTerm.length - i)
     );
 
-    return [...items.data].sort((a, b) => {
-      const aName = a.name.toLowerCase();
-      const bName = b.name.toLowerCase();
+    return [...items].sort((a, b) => {
+      const aName = a.sortBy.toLowerCase();
+      const bName = b.sortBy.toLowerCase();
 
       // Find the longest matching prefix for each item
       const aMatchLength =
@@ -145,7 +149,7 @@ const Suggestions = ({
         return aName.length - bName.length;
       }
     });
-  }, [items?.data, keyword]);
+  }, [items, keyword]);
 
   useEffect(() => {
     onChange?.();
@@ -173,7 +177,7 @@ const Suggestions = ({
         }
         case "Enter": {
           if (selectedIndex >= 0) {
-            onItemSelect(sortedItems[selectedIndex].name);
+            onItemSelect(sortedItems[selectedIndex]);
           }
           break;
         }
@@ -194,13 +198,13 @@ const Suggestions = ({
           {sortedItems.map((item, index) => (
             <li
               key={index}
-              onClick={() => onItemSelect(item.name)}
+              onClick={() => onItemSelect(item)}
               onMouseEnter={() => setSelectedIndex(index)}
               className={`p-2 ${
                 selectedIndex === index ? "bg-gray-100 text-black" : ""
               } cursor-pointer`}
             >
-              {item.name}
+              {item.displayText}
             </li>
           ))}
         </ul>

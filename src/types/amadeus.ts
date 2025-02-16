@@ -47,19 +47,3 @@ export interface Location {
     geoCode: GeoCode;
     relationships?: Relationship[];
 }
-
-export interface CityResponse {
-    data: Array<{
-        type: string;
-        subType: string;
-        name: string;
-        iataCode: string;
-        address: {
-            countryCode: string;
-        };
-        geoCode: {
-            latitude: string;
-            longitude: string;
-        };
-    }>;
-} 

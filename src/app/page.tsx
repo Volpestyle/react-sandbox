@@ -6,16 +6,22 @@ export default function Home() {
       <h1 className="text-4xl font-bold">NextJS Sandbox</h1>
       <div className="mt-6 flex flex-col">
         <Link
+          href="/typeahead"
+          className="text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          typeahead search component
+        </Link>
+        <Link
           href="/users-search"
           className="text-blue-600 hover:text-blue-800 hover:underline"
         >
           users search
         </Link>
         <Link
-          href="/typeahead-city-search"
+          href="/todo-list"
           className="text-blue-600 hover:text-blue-800 hover:underline"
         >
-          search typeahead
+          todo list
         </Link>
       </div>
     </div>

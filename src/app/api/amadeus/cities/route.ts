@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken, clearToken } from "@/lib/amadeus";
-
-const AMADEUS_API_URL = process.env.AMADEUS_API_URL;
+import { AMADEUS_API_URL } from "@/constants";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
     const keyword = request.nextUrl.searchParams.get('keyword');
