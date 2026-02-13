@@ -29,6 +29,12 @@ export default function Home() {
         >
           google places
         </Link>
+        <Link
+          href="/graphql-lab"
+          className="text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          graphql lab
+        </Link>
       </div>
     </div>
   );

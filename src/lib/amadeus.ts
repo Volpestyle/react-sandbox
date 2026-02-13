@@ -1,11 +1,15 @@
 import NodeCache from "node-cache";
 import { GetCommand, PutCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { AmadeusTokenData, AmadeusTokenResponse } from '@/types/amadeus';
-import { AMADEUS_TOKEN_KEY, AMADEUS_TOKEN_TABLE_NAME } from "@/constants";
+import {
+    AMADEUS_API_URL as DEFAULT_AMADEUS_API_URL,
+    AMADEUS_TOKEN_KEY,
+    AMADEUS_TOKEN_TABLE_NAME,
+} from "@/constants";
 import { getDynamoClient } from "./aws";
 const AMADEUS_API_KEY = process.env.AMADEUS_API_KEY;
 const AMADEUS_API_SECRET = process.env.AMADEUS_API_SECRET;
-const AMADEUS_API_URL = process.env.AMADEUS_API_URL;
+const AMADEUS_API_URL = process.env.AMADEUS_API_URL || DEFAULT_AMADEUS_API_URL;
 
 // Use different caching strategies based on environment
 const isDev = process.env.NODE_ENV === 'development';
@@ -27,6 +31,10 @@ const cacheClient = isDev ? new NodeCache({ stdTTL: 3600 }) : getDynamoClient();
  */
 export async function getToken(): Promise<string> {
     try {
+        if (!AMADEUS_API_KEY || !AMADEUS_API_SECRET) {
+            throw new Error("Missing AMADEUS_API_KEY or AMADEUS_API_SECRET");
+        }
+
         const cachedToken = await getCachedToken();
 
         if (cachedToken && cachedToken.expiresAt > Date.now()) {

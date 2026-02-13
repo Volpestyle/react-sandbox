@@ -1,50 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getToken, clearToken } from "@/lib/amadeus";
-import { AMADEUS_API_URL } from "@/constants";
+import { fetchAmadeusCities } from "@/lib/amadeus-cities";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
-    const keyword = request.nextUrl.searchParams.get('keyword');
+  const keyword = request.nextUrl.searchParams.get("keyword")?.trim();
+  const maxParam = request.nextUrl.searchParams.get("max");
+  const max = maxParam ? Number(maxParam) : 10;
 
-    try {
-        const token = await getToken();
-        const response = await fetch(
-            `${AMADEUS_API_URL}/reference-data/locations/cities?keyword=${keyword}&max=10`,
-            {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            }
-        );
+  if (!keyword) {
+    return NextResponse.json(
+      { error: "keyword query parameter is required" },
+      { status: 400 },
+    );
+  }
 
-        if (!response.ok) {
-            if (response.status === 401) {
-                await clearToken();
-            }
+  try {
+    const data = await fetchAmadeusCities(keyword, Number.isNaN(max) ? 10 : max);
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("Error fetching cities:", error);
 
-            const errorData = await response.json();
-            throw new Error(JSON.stringify({
-                status: response.status,
-                ...errorData
-            }));
-        }
-
-        const data = await response.json();
-        return NextResponse.json(data);
-    } catch (error) {
-        console.error('Error fetching cities:', error);
-
-        // If it's our structured error, pass it through
-        if (error instanceof Error && error.message.startsWith('{')) {
-            return NextResponse.json(
-                JSON.parse(error.message),
-                { status: JSON.parse(error.message).status }
-            );
-        }
-
-        // For unexpected errors
-        return NextResponse.json(
-            { error: 'Internal Server Error', message: error instanceof Error ? error.message : 'Unknown error' },
-            { status: 500 }
-        );
+    // If it's our structured error, pass it through
+    if (error instanceof Error && error.message.startsWith("{")) {
+      const parsedError = JSON.parse(error.message) as { status: number };
+      return NextResponse.json(parsedError, { status: parsedError.status });
     }
+
+    // For unexpected errors
+    return NextResponse.json(
+      {
+        error: "Internal Server Error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    );
+  }
 }
