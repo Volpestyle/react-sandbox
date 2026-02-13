@@ -1,8 +1,19 @@
 import { GOOGLE_PLACES_AUTOCOMPLETE_API_URL } from "@/constants";
 import { NextRequest, NextResponse } from "next/server";
 
+const getGoogleApiKey = () =>
+    process.env.GOOGLE_CLOUD_API_KEY || process.env.GOOGLE_MAPS_PLATFORM_API_KEY;
+
 export async function GET(request: NextRequest) {
     try {
+        const apiKey = getGoogleApiKey();
+        if (!apiKey) {
+            return NextResponse.json(
+                { error: "GOOGLE_CLOUD_API_KEY is required" },
+                { status: 500 }
+            );
+        }
+
         const searchParams = request.nextUrl.searchParams;
         const input = searchParams.get("input");
         const sessiontoken = searchParams.get("sessiontoken");
@@ -19,7 +30,7 @@ export async function GET(request: NextRequest) {
 
         // Add required parameters
         url.searchParams.append("input", input);
-        url.searchParams.append("key", process.env.GOOGLE_MAPS_PLATFORM_API_KEY || "");
+        url.searchParams.append("key", apiKey);
 
         // Add optional parameters if provided
         if (sessiontoken) {
@@ -58,12 +69,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
     try {
+        const apiKey = getGoogleApiKey();
+        if (!apiKey) {
+            return NextResponse.json(
+                { error: "GOOGLE_CLOUD_API_KEY is required" },
+                { status: 500 }
+            );
+        }
+
         const body = await request.json();
         const url = 'https://places.googleapis.com/v1/places:autocomplete';
 
         const headers = {
             'Content-Type': 'application/json',
-            'X-Goog-Api-Key': process.env.GOOGLE_MAPS_PLATFORM_API_KEY || '',
+            'X-Goog-Api-Key': apiKey,
             // Optional: Add field mask to specify which fields to return
             // 'X-Goog-FieldMask': 'places.displayName,places.formattedAddress'
         };

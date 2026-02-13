@@ -35,6 +35,12 @@ export default function Home() {
         >
           graphql lab
         </Link>
+        <Link
+          href="/travel-planner"
+          className="text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          travel planner (graphql bff)
+        </Link>
       </div>
     </div>
   );

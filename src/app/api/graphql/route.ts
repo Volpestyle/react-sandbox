@@ -1,10 +1,9 @@
 import { fetchAmadeusCities } from "@/lib/amadeus-cities";
 import {
   AMADEUS_CITIES_KEYWORD_MIN_LENGTH,
-  GOOGLE_PLACES_AUTOCOMPLETE_API_URL,
   USERS_ENDPOINT,
 } from "@/constants";
-import type { GooglePlacesAutocompleteResponse } from "@/types/google-maps";
+import type { GooglePlacesAutocompleteNewResponse } from "@/types/google-maps";
 import { GraphQLError } from "graphql";
 import { createSchema, createYoga } from "graphql-yoga";
 
@@ -27,41 +26,33 @@ const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
 async function fetchGooglePlacesAutocomplete(input: string) {
-  const apiKey = process.env.GOOGLE_MAPS_PLATFORM_API_KEY;
+  const apiKey = process.env.GOOGLE_CLOUD_API_KEY;
   if (!apiKey) {
-    throw new Error("Missing GOOGLE_MAPS_PLATFORM_API_KEY");
+    throw new Error("Missing GOOGLE_CLOUD_API_KEY");
   }
 
-  const url = new URL(GOOGLE_PLACES_AUTOCOMPLETE_API_URL);
-  url.searchParams.set("input", input);
-  url.searchParams.set("key", apiKey);
-  url.searchParams.set("types", "geocode");
-  url.searchParams.set("language", "en");
-
-  const response = await fetch(url.toString());
+  const response = await fetch("https://places.googleapis.com/v1/places:autocomplete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+    },
+    body: JSON.stringify({
+      input,
+    }),
+  });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => null) as {
-      error_message?: string;
+      error?: { message?: string };
     } | null;
     throw new Error(
-      errorData?.error_message ||
+      errorData?.error?.message ||
         `Google Places API error: ${response.status} ${response.statusText}`,
     );
   }
 
-  const data = (await response.json()) as GooglePlacesAutocompleteResponse & {
-    status?: string;
-    error_message?: string;
-  };
-
-  if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
-    throw new Error(
-      data.error_message || `Google Places API error: ${data.status ?? "UNKNOWN"}`,
-    );
-  }
-
-  return data;
+  return (await response.json()) as GooglePlacesAutocompleteNewResponse;
 }
 
 const typeDefs = /* GraphQL */ `
@@ -178,17 +169,21 @@ const resolvers = {
 
       try {
         const data = await fetchGooglePlacesAutocomplete(input);
-        const places = data.predictions
+        const places = data.suggestions
+          .map((suggestion) => suggestion.placePrediction)
+          .filter((prediction): prediction is NonNullable<typeof prediction> =>
+            Boolean(prediction),
+          )
           .slice(0, max)
           .map((prediction) => ({
-            placeId: prediction.place_id,
-            text: prediction.description,
-            place: null,
-            primaryText: prediction.structured_formatting.main_text ?? null,
+            placeId: prediction.placeId,
+            text: prediction.text.text,
+            place: prediction.place ?? null,
+            primaryText: prediction.structuredFormat?.mainText.text ?? null,
             secondaryText:
-              prediction.structured_formatting.secondary_text ?? null,
+              prediction.structuredFormat?.secondaryText?.text ?? null,
             types: prediction.types ?? [],
-            distanceMeters: null,
+            distanceMeters: prediction.distanceMeters ?? null,
           }));
 
         return {
