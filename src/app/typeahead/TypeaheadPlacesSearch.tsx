@@ -1,6 +1,7 @@
 "use client";
 import TypeaheadSearch from "@/components/TypeaheadSearch";
-import { TypeaheadItem, useGooglePlacesAutocomplete } from "@/hooks/api";
+import { TypeaheadItem } from "@/hooks/api";
+import { useGooglePlacesAutocomplete } from "@/hooks/google-places";
 import { useState } from "react";
 
 const TypeaheadPlacesSearch = () => {

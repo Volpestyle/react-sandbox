@@ -9,11 +9,15 @@ import { TypeaheadItem } from "@/hooks/api";
 
 interface TypeaheadSearchProps {
   fetchItems: (keyword: string) => UseQueryResult<TypeaheadItem[], Error>;
+
   selectedItem: TypeaheadItem | null;
   setSelectedItem: (item: TypeaheadItem | null) => void;
+
   label?: string;
-  showEmptyState?: boolean;
   keywordMinLength?: number;
+  debounceTime?: number;
+  showEmptyState?: boolean;
+  sort?: boolean;
 }
 
 /**
@@ -26,15 +30,23 @@ const TypeaheadSearch = ({
   selectedItem,
   setSelectedItem,
   label = "suggestions",
-  showEmptyState = true,
   keywordMinLength = 1,
+  debounceTime = 300,
+  showEmptyState = true,
+  sort = false,
 }: TypeaheadSearchProps) => {
   const [inputVal, setInputVal] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [retry, setRetry] = useState<number>(0);
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const debouncedSearchTerm = useDebounce(searchTerm, debounceTime);
+  const debouncedSelectedItem = useDebounce(selectedItem, debounceTime);
   const itemsQuery = fetchItems(debouncedSearchTerm);
+
+  const handleItemSelect = (item: TypeaheadItem) => {
+    setInputVal(item.displayText);
+    setSelectedItem(item);
+  };
 
   /**
    * Manages the synchronization between input value and search/selection states
@@ -48,13 +60,12 @@ const TypeaheadSearch = ({
    */
   useEffect(() => {
     // When no item is selected, input changes should update search term
-    if (!selectedItem && inputVal.length >= keywordMinLength)
-      setSearchTerm(inputVal);
+    if (!selectedItem) setSearchTerm(inputVal);
 
     // Clear selection if user modifies input after selecting an item
     if (selectedItem && inputVal !== selectedItem.displayText)
       setSelectedItem(null);
-  }, [inputVal, selectedItem]);
+  }, [inputVal, selectedItem, setSelectedItem]);
 
   useEffect(() => {
     setRetry((prev) => prev + 1);
@@ -82,44 +93,52 @@ const TypeaheadSearch = ({
         }}
       >
         <Suspense fallback={<Loading message={label} />}>
-          {showEmptyState && inputVal.length < keywordMinLength && (
-            <p>Start typing to search for {label}</p>
-          )}
-          {debouncedSearchTerm.length >= keywordMinLength &&
-            searchTerm === inputVal &&
-            !selectedItem && (
-              <Suggestions
-                keyword={debouncedSearchTerm}
-                itemsQuery={itemsQuery}
-                onItemSelect={(item) => {
-                  setInputVal(item.displayText);
-                  setSelectedItem(item);
-                }}
-              />
-            )}
+          <Suggestions
+            keyword={debouncedSearchTerm}
+            itemsQuery={itemsQuery}
+            label={label}
+            keywordMinLength={keywordMinLength}
+            showEmptyState={showEmptyState}
+            sort={sort}
+            onItemSelect={handleItemSelect}
+            itemIsSelected={!!debouncedSelectedItem}
+          />
         </Suspense>
       </ErrorBoundary>
     </div>
   );
 };
 
+interface SuggestionsProps {
+  keyword: string;
+  itemsQuery: UseQueryResult<TypeaheadItem[], Error>;
+  label: string;
+  keywordMinLength: number;
+  showEmptyState: boolean;
+  sort: boolean;
+  onItemSelect: (item: TypeaheadItem) => void;
+  onChange?: () => void;
+  itemIsSelected: boolean;
+}
+
 const Suggestions = ({
   keyword,
   itemsQuery,
+  label,
+  keywordMinLength,
+  showEmptyState,
+  sort,
   onItemSelect,
   onChange,
-}: {
-  keyword: string;
-  itemsQuery: UseQueryResult<TypeaheadItem[], Error>;
-  onItemSelect: (item: TypeaheadItem) => void;
-  onChange?: () => void;
-}) => {
+  itemIsSelected,
+}: SuggestionsProps) => {
   const items = use(itemsQuery.promise);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
 
   // Enhanced sorting with progressive matching priority
   const sortedItems = useMemo(() => {
     if (!items) return [];
+    if (!sort) return items;
     const searchTerm = keyword.toLowerCase();
 
     // Generate array of progressive search terms
@@ -149,7 +168,7 @@ const Suggestions = ({
         return aName.length - bName.length;
       }
     });
-  }, [items, keyword]);
+  }, [items, keyword, sort]);
 
   useEffect(() => {
     onChange?.();
@@ -176,7 +195,7 @@ const Suggestions = ({
           break;
         }
         case "Enter": {
-          if (selectedIndex >= 0) {
+          if (selectedIndex >= 0 && sortedItems[selectedIndex]) {
             onItemSelect(sortedItems[selectedIndex]);
           }
           break;
@@ -190,38 +209,44 @@ const Suggestions = ({
     };
   }, [sortedItems, selectedIndex, onItemSelect]);
 
+  if (itemIsSelected) return null;
+  if (showEmptyState && keyword.length < keywordMinLength) {
+    return <p>Start typing to search for {label}</p>;
+  }
+  if (!sortedItems.length) {
+    return <p>No results found</p>;
+  }
   return (
     <>
-      {!sortedItems.length && <p>No results found</p>}
-      {!!sortedItems.length && (
-        <ul className="mt-2">
-          {sortedItems.map((item, index) => (
-            <li
-              key={index}
-              onClick={() => onItemSelect(item)}
-              onMouseEnter={() => setSelectedIndex(index)}
-              className={`p-2 ${
-                selectedIndex === index ? "bg-gray-100 text-black" : ""
-              } cursor-pointer`}
-            >
-              {item.displayText}
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className="mt-2">
+        {sortedItems.map((item, index) => (
+          <li
+            key={index}
+            onClick={() => onItemSelect(item)}
+            onMouseEnter={() => setSelectedIndex(index)}
+            className={`p-2 ${
+              selectedIndex === index ? "bg-gray-100 text-black" : ""
+            } cursor-pointer`}
+          >
+            {item.displayText}
+          </li>
+        ))}
+      </ul>
     </>
   );
 };
+
+interface InputProps {
+  inputVal: string;
+  setInputVal: (inputVal: string) => void;
+  placeholder?: string;
+}
 
 const Input = ({
   inputVal,
   setInputVal,
   placeholder = "Search...",
-}: {
-  inputVal: string;
-  setInputVal: (inputVal: string) => void;
-  placeholder?: string;
-}) => {
+}: InputProps) => {
   return (
     <input
       value={inputVal}

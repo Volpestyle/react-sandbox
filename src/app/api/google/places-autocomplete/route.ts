@@ -55,3 +55,37 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+
+export async function POST(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const url = 'https://places.googleapis.com/v1/places:autocomplete';
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': process.env.GOOGLE_MAPS_PLATFORM_API_KEY || '',
+            // Optional: Add field mask to specify which fields to return
+            // 'X-Goog-FieldMask': 'places.displayName,places.formattedAddress'
+        };
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error?.message || `Google Places API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return NextResponse.json(data);
+    } catch (error) {
+        console.error("Places Autocomplete API error:", error);
+        return NextResponse.json(
+            { error: "Failed to fetch place suggestions" },
+            { status: 500 }
+        );
+    }
+}

@@ -18,6 +18,7 @@ const TypeaheadCitySearch = () => {
         label="cities"
         showEmptyState={true}
         keywordMinLength={AMADEUS_CITIES_KEYWORD_MIN_LENGTH}
+        sort={true}
       />
     </div>
   );
